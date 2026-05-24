@@ -82,8 +82,40 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 }
 .statusbar .meta b { color: var(--fg); }
 
+/* Планшет — карточки видео в один столбец, остальное оставляем */
 @media (max-width: 900px) {
   .stage { grid-template-columns: 1fr; }
   .video-area { grid-template-columns: 1fr; }
-  .room-controls { flex-wrap: wrap; }
+}
+
+/* Узкий мобильный — топбар разворачиваем в колонку,
+   чтобы переключатель режимов и кнопки не уезжали за край */
+@media (max-width: 700px) {
+  .topbar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+    padding: 12px 14px;
+  }
+  .brand { text-align: center; font-size: 16px; }
+  .room-controls {
+    flex-wrap: wrap;
+    max-width: none;
+  }
+  .room-controls input { flex: 1 1 100%; min-width: 0; }
+  .room-controls button {
+    flex: 1 1 calc(50% - 4px);  /* по две кнопки в ряд */
+    min-width: 0;
+    white-space: nowrap;
+  }
+  .mode-switch {
+    justify-content: center;
+    gap: 18px;
+    padding-top: 4px;
+    border-top: 1px solid var(--border);
+  }
+  .stage { padding: 12px; gap: 12px; }
+  .dashboard { padding: 12px; }
+  #metricsTable { font-size: 12px; }
+  .statusbar { padding: 8px 14px; flex-wrap: wrap; gap: 6px; }
 }
