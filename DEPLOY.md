@@ -85,7 +85,7 @@ ssh -i ~/.ssh/ssh_keys/private_key user@158.160.220.226 \
 # должно вывести: free
 ```
 
-Если занят — поменяй `PORT` в `ecosystem.config.js` (например, `8090`) и
+Если занят — поменяй `PORT` в `ecosystem.config.cjs` (например, `8090`) и
 такой же `proxy_pass` в `deploy/nginx.conf`.
 
 Теперь добавим SSH-ключ в агент один раз за сессию (PM2 Deploy
@@ -101,10 +101,10 @@ ssh-add ~/.ssh/ssh_keys/private_key
 cd ~/apprtc/adaptive-prototype
 
 # Первый раз: pm2 склонирует репозиторий в /home/user/apprtc-adaptive
-pm2 deploy ecosystem.config.js production setup
+pm2 deploy ecosystem.config.cjs production setup
 
 # Собственно деплой — pull + npm install --omit=dev + pm2 reload
-pm2 deploy ecosystem.config.js production
+pm2 deploy ecosystem.config.cjs production
 ```
 
 Проверка:
@@ -179,7 +179,7 @@ QR на эту ссылку поставишь на каждый слайд пр
 
 ```bash
 git add -A && git commit -m "..."  && git push
-pm2 deploy ecosystem.config.js production    # pull → install → reload
+pm2 deploy ecosystem.config.cjs production    # pull → install → reload
 ```
 
 ## Если P2P не устанавливается между разными сетями

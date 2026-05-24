@@ -1,12 +1,15 @@
-// ecosystem.config.js — конфигурация PM2 (процесс + автоматизация деплоя).
+// ecosystem.config.cjs — конфигурация PM2 (процесс + автоматизация деплоя).
+// Расширение .cjs обязательно: в package.json стоит "type": "module",
+// поэтому .js-файлы трактуются как ESM, а PM2 deploy ждёт CommonJS.
+//
 // Развёртываемся на VM 158.160.220.226 рядом с уже работающими mesto и
 // kupipodariday. Используется тот же пользователь user и ключ
 // ~/.ssh/ssh_keys/private_key.
 //
 // Использование (с локальной машины):
-//   ssh-add ~/.ssh/ssh_keys/private_key          # один раз за сессию
-//   pm2 deploy ecosystem.config.js production setup    # первый раз
-//   pm2 deploy ecosystem.config.js production          # последующие обновления
+//   ssh-add ~/.ssh/ssh_keys/private_key                       # один раз за сессию
+//   pm2 deploy ecosystem.config.cjs production setup          # первый раз
+//   pm2 deploy ecosystem.config.cjs production                # последующие обновления
 
 module.exports = {
   apps: [
@@ -35,7 +38,7 @@ module.exports = {
       repo: 'https://github.com/lananolana/apprtc-adaptive.git',
       path: '/home/user/apprtc-adaptive',
       'post-deploy':
-        'npm install --omit=dev && pm2 reload ecosystem.config.js --update-env',
+        'npm install --omit=dev && pm2 reload ecosystem.config.cjs --update-env',
       'pre-setup': ''
     }
   }

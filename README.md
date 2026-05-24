@@ -76,7 +76,7 @@ peer-to-peer звонок между вкладками. Дашборд спра
 Шаги развёртывания — см. `DEPLOY.md`. Файлы инфраструктуры:
 
 ```
-ecosystem.config.js   # PM2 process + deploy
+ecosystem.config.cjs   # PM2 process + deploy
 deploy/setup.sh       # одноразовая инициализация VM
 deploy/nginx.conf     # vhost для reverse-proxy + WS upgrade
 ```
