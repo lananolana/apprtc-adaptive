@@ -37,13 +37,9 @@ module.exports = {
       // Public-репо, поэтому HTTPS — на VM не нужен GitHub SSH-ключ
       repo: 'https://github.com/lananolana/apprtc-adaptive.git',
       path: '/home/user/apprtc-adaptive',
-      // SSH non-interactive shells не читают ~/.bashrc, поэтому nvm
-      // подгружаем явно — иначе npm/pm2 не будут найдены.
-      'post-deploy':
-        'export NVM_DIR=$HOME/.nvm && ' +
-        '[ -s "$NVM_DIR/nvm.sh" ] && . "$NVM_DIR/nvm.sh"; ' +
-        'npm install --omit=dev && ' +
-        'pm2 reload ecosystem.config.cjs --update-env',
+      // Всё, что после git pull — в shell-скрипте, чтобы не страдать
+      // от ssh-экранирования сложных bash-выражений (тестов, кавычек).
+      'post-deploy': 'bash deploy/post_deploy.sh',
       'pre-setup': ''
     }
   }
