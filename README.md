@@ -62,12 +62,24 @@ peer-to-peer звонок между вкладками. Дашборд спра
 В режиме `baseline` действуют только встроенные механизмы WebRTC;
 в режиме `adaptive` подключается ступенчатая адаптация качества.
 
-## Деплой (план)
+## Деплой
 
-- Vercel — фронтенд (статика из `client/`)
-- Render.com — Node-сервис (`server/signaling.js`), free tier
-- STUN — публичный `stun.l.google.com:19302`
-- TURN — на этом этапе не используется (P2P через STUN)
+- **Хостинг:** Yandex Cloud Compute VM, Ubuntu 22.04, ~150–200 ₽/мес
+  (или бесплатно по гранту нового аккаунта 4000 ₽ / 60 дней).
+- **Процесс-менеджер:** PM2 + PM2 Deploy (git-based pull-deploy).
+- **Реверс-прокси:** Nginx с TLS-сертификатом от Let's Encrypt (certbot).
+- **Домен:** учебный `*.nomorepartiessite.ru`, A-запись на IP VM.
+- **STUN:** публичный `stun.l.google.com:19302`.
+- **TURN:** не используется на этом этапе; при необходимости — coturn
+  на той же VM или Metered.ca (free 50 GB/мес).
+
+Шаги развёртывания — см. `DEPLOY.md`. Файлы инфраструктуры:
+
+```
+ecosystem.config.js   # PM2 process + deploy
+deploy/setup.sh       # одноразовая инициализация VM
+deploy/nginx.conf     # vhost для reverse-proxy + WS upgrade
+```
 
 ## Лицензии
 
