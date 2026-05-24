@@ -1,0 +1,16 @@
+# Render Blueprint — описание сервиса для автоматического деплоя.
+# При подключении репозитория Render обнаружит этот файл и сам поднимет сервис.
+services:
+  - type: web
+    name: apprtc-adaptive
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: main
+    buildCommand: npm install --omit=dev
+    startCommand: node server/signaling.js
+    autoDeploy: true
+    healthCheckPath: /healthz
+    envVars:
+      - key: NODE_VERSION
+        value: 20

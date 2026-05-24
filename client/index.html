@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>WebRTC Adaptive — прототип ВКР</title>
+  <link rel="stylesheet" href="/ui/styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">WebRTC Adaptive</div>
+    <div class="room-controls">
+      <input id="roomInput" type="text" placeholder="ID комнаты" autocomplete="off" />
+      <button id="joinBtn">Войти / создать</button>
+      <button id="copyLinkBtn" disabled>Копировать ссылку</button>
+      <button id="hangupBtn" disabled>Завершить</button>
+    </div>
+    <div class="mode-switch">
+      <label><input type="radio" name="mode" value="baseline" checked /> baseline</label>
+      <label><input type="radio" name="mode" value="adaptive" /> adaptive</label>
+    </div>
+  </header>
+
+  <main class="stage">
+    <section class="video-area">
+      <div class="video-card">
+        <video id="localVideo" autoplay playsinline muted></video>
+        <div class="video-label">Локальный</div>
+      </div>
+      <div class="video-card">
+        <video id="remoteVideo" autoplay playsinline></video>
+        <div class="video-label">Удалённый</div>
+      </div>
+    </section>
+
+    <aside class="dashboard">
+      <h2>Телеметрия WebRTC</h2>
+      <table id="metricsTable">
+        <tbody>
+          <tr><th>Состояние ICE</th><td id="m-ice">—</td></tr>
+          <tr><th>Состояние PC</th><td id="m-pc">—</td></tr>
+          <tr><th>RTT, мс</th><td id="m-rtt">—</td></tr>
+          <tr><th>Jitter, мс</th><td id="m-jitter">—</td></tr>
+          <tr><th>Packet loss, %</th><td id="m-loss">—</td></tr>
+          <tr><th>Video bitrate, кбит/с</th><td id="m-vbr">—</td></tr>
+          <tr><th>Audio bitrate, кбит/с</th><td id="m-abr">—</td></tr>
+          <tr><th>FPS (отправка)</th><td id="m-fps">—</td></tr>
+          <tr><th>Разрешение (отправка)</th><td id="m-res">—</td></tr>
+          <tr><th>Frames dropped</th><td id="m-drops">—</td></tr>
+          <tr><th>QoE score</th><td id="m-qoe">—</td></tr>
+          <tr><th>Состояние адаптации</th><td id="m-adapt">—</td></tr>
+        </tbody>
+      </table>
+    </aside>
+  </main>
+
+  <footer class="statusbar">
+    <span id="statusText">Готов к подключению.</span>
+    <span class="meta">режим: <b id="modeLabel">baseline</b></span>
+  </footer>
+
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

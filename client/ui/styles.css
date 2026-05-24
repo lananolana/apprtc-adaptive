@@ -1,0 +1,89 @@
+/* Минимальные стили дашборда. Тёмная тема, фокус на читаемости метрик. */
+:root {
+  --bg:        #0f1115;
+  --bg-elev:   #181b22;
+  --bg-elev2:  #1f232c;
+  --fg:        #e6e8ec;
+  --fg-dim:    #9aa0aa;
+  --accent:    #4f8cff;
+  --ok:        #3ecf8e;
+  --warn:      #f7b955;
+  --bad:       #ef4f4f;
+  --border:    #2a2f3a;
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: var(--bg);
+  color: var(--fg);
+  display: flex; flex-direction: column;
+}
+.topbar {
+  display: flex; align-items: center; gap: 16px;
+  padding: 12px 20px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+}
+.brand { font-weight: 700; font-size: 18px; letter-spacing: .2px; }
+.room-controls { display: flex; gap: 8px; flex: 1; max-width: 720px; }
+.room-controls input {
+  flex: 1; padding: 8px 12px; border-radius: 6px;
+  background: var(--bg-elev2); color: var(--fg);
+  border: 1px solid var(--border); outline: none;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.room-controls input:focus { border-color: var(--accent); }
+button {
+  padding: 8px 14px; border-radius: 6px; cursor: pointer;
+  background: var(--bg-elev2); color: var(--fg);
+  border: 1px solid var(--border); font-weight: 500;
+}
+button:hover:not(:disabled) { border-color: var(--accent); }
+button:disabled { opacity: .45; cursor: not-allowed; }
+.mode-switch { display: flex; gap: 12px; }
+.mode-switch label { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+
+.stage {
+  flex: 1; display: grid; grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 16px; padding: 16px;
+}
+.video-area { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; min-height: 0; }
+.video-card {
+  background: #000; border-radius: 10px; overflow: hidden;
+  position: relative; aspect-ratio: 16 / 9;
+}
+.video-card video { width: 100%; height: 100%; object-fit: cover; background: #000; }
+.video-label {
+  position: absolute; left: 10px; bottom: 10px;
+  font-size: 12px; padding: 3px 8px; border-radius: 4px;
+  background: rgba(0,0,0,.55); color: var(--fg);
+}
+
+.dashboard {
+  background: var(--bg-elev); border: 1px solid var(--border); border-radius: 10px;
+  padding: 14px 16px; overflow: auto;
+}
+.dashboard h2 { margin: 0 0 10px 0; font-size: 14px; color: var(--fg-dim); text-transform: uppercase; letter-spacing: .8px; }
+#metricsTable { width: 100%; border-collapse: collapse; font-size: 13px; }
+#metricsTable th {
+  text-align: left; font-weight: 500; color: var(--fg-dim); padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+}
+#metricsTable td {
+  text-align: right; padding: 6px 0; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  border-bottom: 1px solid var(--border);
+}
+
+.statusbar {
+  padding: 8px 20px; background: var(--bg-elev); border-top: 1px solid var(--border);
+  display: flex; justify-content: space-between; font-size: 13px; color: var(--fg-dim);
+}
+.statusbar .meta b { color: var(--fg); }
+
+@media (max-width: 900px) {
+  .stage { grid-template-columns: 1fr; }
+  .video-area { grid-template-columns: 1fr; }
+  .room-controls { flex-wrap: wrap; }
+}

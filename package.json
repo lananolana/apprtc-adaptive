@@ -1,0 +1,17 @@
+{
+  "name": "apprtc-adaptive",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Adaptive WebRTC video quality controller — master's thesis prototype on top of webrtc/apprtc baseline.",
+  "type": "module",
+  "scripts": {
+    "start": "node server/signaling.js",
+    "dev": "node server/signaling.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
