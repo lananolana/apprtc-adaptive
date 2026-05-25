@@ -23,7 +23,7 @@ import { FreezeDetector }        from '/adaptive/freeze-detector.js';
 import { RecoveryManager }       from '/adaptive/recovery.js';
 import { showToast }             from '/adaptive/toast.js';
 import {
-  setAudioOnly, setFrozen, setRecovering, resetOverlays, updateQualityBadge,
+  setAudioOnly, setFrozen, setRecovering, setPeerLeft, resetOverlays, updateQualityBadge,
 } from '/adaptive/overlays.js';
 
 // --- параметры -------------------------------------------------------------
@@ -67,6 +67,8 @@ let recoveryManager = null;
 let lastDecisionAction = null;
 let audioOnlyActive = false;
 let recoveryActive = false;
+let peerLeftActive = false;
+let lastPeerCount = 0;
 
 // --- утилиты -----------------------------------------------------------------
 function setStatus(text) { statusText.textContent = text; }
@@ -116,9 +118,7 @@ async function onSignalingMessage(ev) {
       setStatus(`Вошёл в комнату ${msg.roomId} как ${role}. ${msg.count === 1 ? 'Ожидание второго участника…' : ''}`);
       break;
     case 'peers':
-      if (msg.count === 2 && role === 'caller') {
-        await createOffer();
-      }
+      handlePeersCount(msg.count);
       break;
     case 'offer':
       await handleOffer(msg.sdp);
@@ -204,6 +204,49 @@ async function handleOffer(sdp) {
   setStatus('Answer отправлен.');
 }
 
+/**
+ * Реакция на изменение количества участников в комнате.
+ * 0 — мы только что вошли, ничего не делаем (текущий клиент видит peers
+ *     только после своего же join — там min count = 1).
+ * 1 — мы остались одни. Если до этого было 2, значит собеседник вышел —
+ *     переходим в терминальное состояние "peer left" и гасим попытки
+ *     восстановления (восстанавливать некого).
+ * 2 — двое в комнате. Если до этого было 1 и мы caller — инициируем offer
+ *     (как при первом установлении или если пир вернулся после выхода).
+ */
+async function handlePeersCount(count) {
+  const prev = lastPeerCount;
+  lastPeerCount = count;
+
+  if (count === 2 && prev <= 1) {
+    // собеседник пришёл (или вернулся) — гасим peer-left, готовим звонок
+    if (peerLeftActive) {
+      peerLeftActive = false;
+      setPeerLeft(false);
+      showToast('Собеседник вернулся', { type: 'success', duration: 3000 });
+    }
+    if (role === 'caller') await createOffer();
+    return;
+  }
+
+  if (count === 1 && prev === 2) {
+    // собеседник вышел
+    peerLeftActive = true;
+    setPeerLeft(true);
+    // гасим оверлеи и наблюдателей, чтобы не маячило «восстанавливаем»
+    setFrozen(false);
+    setRecovering(false);
+    recoveryActive = false;
+    audioOnlyActive = false;
+    setAudioOnly(false);
+    // очищаем удалённое видео, чтобы не висел последний кадр под оверлеем
+    try { remoteVideo.srcObject = null; } catch {}
+    updateQualityBadge({ qoeScore: null, peerLeft: true });
+    showToast('Собеседник вышел из звонка', { type: 'info', duration: 5000 });
+    setStatus('Собеседник вышел. Можно подождать или завершить сессию.');
+  }
+}
+
 /** Перепогон ICE: caller формирует новый offer с iceRestart: true. */
 async function sendRestartOffer() {
   if (!pc) return;
@@ -219,6 +262,7 @@ function hangup(notifyRemote) {
   if (pc) { try { pc.close(); } catch {} pc = null; }
   if (ws) { try { ws.close(); } catch {} ws = null; }
   remoteVideo.srcObject = null;
+  lastPeerCount = 0;
   resetOverlays();
   updateQualityBadge({ qoeScore: null });
   setStatus('Сессия завершена.');
@@ -238,13 +282,13 @@ function startTelemetry() {
   freezeDetector = new FreezeDetector({
     thresholdMs: 3000,
     onFreezeChange: (frozen) => {
-      // не перетираем audio-only оверлей: если видео и так отключено, фриз бесполезен
-      if (audioOnlyActive) return;
+      // не показываем фриз ни поверх audio-only, ни если собеседник вышел
+      if (audioOnlyActive || peerLeftActive) return;
       setFrozen(frozen);
       if (frozen) {
-        showToast('Сигнал ослаб, восстанавливаем картинку…', { type: 'warn' });
+        showToast('Видеосигнал прерывается', { type: 'warn' });
       } else {
-        showToast('Картинка восстановлена', { type: 'success', duration: 2500 });
+        showToast('Изображение вернулось', { type: 'success', duration: 2500 });
       }
     },
   });
@@ -255,9 +299,11 @@ function startTelemetry() {
     sendRestartOffer,
     sendRestartRequest: () => sendSignal({ type: 'restart-request' }),
     onRecoveryStart: (reason, attempt) => {
+      // если собеседник вышел — восстанавливать некого, не дёргаемся
+      if (peerLeftActive) return;
       recoveryActive = true;
       setRecovering(true, attempt, reason);
-      showToast(`Восстанавливаем соединение… (попытка ${attempt})`, {
+      showToast(`Соединение восстанавливается. Попытка ${attempt} из 3`, {
         type: 'warn', duration: 6000,
       });
       log('recovery start:', reason, 'attempt', attempt);
@@ -265,15 +311,17 @@ function startTelemetry() {
     onRecoverySuccess: () => {
       recoveryActive = false;
       setRecovering(false);
-      showToast('Соединение восстановлено', { type: 'success' });
+      showToast('Связь восстановлена', { type: 'success' });
       log('recovery success');
     },
     onRecoveryFail: () => {
       recoveryActive = false;
       setRecovering(false);
-      showToast('Не удалось восстановить соединение. Попробуйте переподключиться.', {
-        type: 'error', duration: 8000,
-      });
+      if (!peerLeftActive) {
+        showToast('Связь не восстановилась. Завершите сессию и подключитесь заново.', {
+          type: 'error', duration: 8000,
+        });
+      }
       log('recovery fail');
     },
   });
@@ -289,14 +337,18 @@ function startTelemetry() {
     renderMetrics(smoothed, { mode, decision });
     recorder.record(smoothed, mode);
 
-    // UX-наблюдатели поверх адаптивного слоя
-    freezeDetector?.observe(smoothed);
-    recoveryManager?.observe(smoothed);
+    // UX-наблюдатели поверх адаптивного слоя.
+    // Если собеседник вышел — наблюдатели не нужны.
+    if (!peerLeftActive) {
+      freezeDetector?.observe(smoothed);
+      recoveryManager?.observe(smoothed);
+    }
 
     updateQualityBadge({
       qoeScore: smoothed.qoeScore,
       audioOnly: audioOnlyActive,
       recovering: recoveryActive,
+      peerLeft: peerLeftActive,
     });
   }, { intervalMs: 1000 });
 }
@@ -309,14 +361,14 @@ function handlePolicyDecision(decision) {
       setAudioOnly(true);
       // freeze-оверлей не нужен, когда видео осознанно выключено
       setFrozen(false);
-      showToast('Сеть сильно деградировала — временно отключаем видео', {
+      showToast('Видео отключилось из-за слабой сети', {
         type: 'warn', duration: 6000,
       });
       break;
     case 'restoreVideo':
       audioOnlyActive = false;
       setAudioOnly(false);
-      showToast('Видео восстановлено', { type: 'success' });
+      showToast('Видео восстановилось', { type: 'success' });
       break;
     case 'downgrade':
       // приглушённое сообщение — не спамим тостами по каждой ступени
@@ -335,6 +387,7 @@ function stopTelemetry() {
   recoveryManager = null;
   audioOnlyActive = false;
   recoveryActive = false;
+  peerLeftActive = false;
   resetOverlays();
 }
 

@@ -127,9 +127,11 @@ button:disabled { opacity: .45; cursor: not-allowed; }
 .overlay-icon    { font-size: 56px; line-height: 1; color: var(--accent); }
 .overlay-title   { font-size: 16px; font-weight: 600; }
 .overlay-text    { font-size: 13px; color: var(--fg-dim); max-width: 320px; }
-.overlay-audio    .overlay-icon { color: var(--accent); }
-.overlay-freeze   { background: rgba(15, 17, 21, .70); }
-.overlay-recovery { background: rgba(63, 16, 16, .80); }
+.overlay-audio     .overlay-icon { color: var(--accent); }
+.overlay-freeze    { background: rgba(15, 17, 21, .70); }
+.overlay-recovery  { background: rgba(63, 16, 16, .80); }
+.overlay-peer-left { background: rgba(15, 17, 21, .92); }
+.overlay-peer-left .overlay-icon { color: var(--fg-dim); font-size: 44px; }
 
 .overlay-spinner {
   width: 36px; height: 36px; border-radius: 50%;

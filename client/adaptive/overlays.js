@@ -9,6 +9,7 @@ const state = {
   audioOnly: false,
   frozen: false,
   recovering: false,
+  peerLeft: false,
   recoveryReason: '',
   attempt: 0,
 };
@@ -17,32 +18,29 @@ function render() {
   const audioOnly = $('overlayAudioOnly');
   const frozen = $('overlayFrozen');
   const recovery = $('overlayRecovery');
-  if (!audioOnly || !frozen || !recovery) return;
+  const peerLeft = $('overlayPeerLeft');
+  if (!audioOnly || !frozen || !recovery || !peerLeft) return;
 
-  // priority order
+  // приоритет: peerLeft (терминальное) > recovery > frozen > audio
+  const showOnly = (which) => {
+    show(peerLeft, which === 'peerLeft');
+    show(recovery, which === 'recovery');
+    show(frozen,   which === 'frozen');
+    show(audioOnly, which === 'audio');
+  };
+
+  if (state.peerLeft)     return showOnly('peerLeft');
   if (state.recovering) {
-    show(recovery, true);
-    show(frozen, false);
-    show(audioOnly, false);
+    showOnly('recovery');
     const att = $('overlayRecoveryAttempt');
-    if (att) att.textContent = state.attempt > 0 ? `Попытка ${state.attempt}` : '';
+    if (att) att.textContent = state.attempt > 0
+      ? `Попытка ${state.attempt} из 3`
+      : 'Подождите несколько секунд.';
     return;
   }
-  if (state.frozen) {
-    show(recovery, false);
-    show(frozen, true);
-    show(audioOnly, false);
-    return;
-  }
-  if (state.audioOnly) {
-    show(recovery, false);
-    show(frozen, false);
-    show(audioOnly, true);
-    return;
-  }
-  show(recovery, false);
-  show(frozen, false);
-  show(audioOnly, false);
+  if (state.frozen)       return showOnly('frozen');
+  if (state.audioOnly)    return showOnly('audio');
+  showOnly(null);
 }
 
 function show(el, visible) {
@@ -58,10 +56,12 @@ export function setRecovering(v, attempt = 0, reason = '') {
   state.recoveryReason = reason;
   render();
 }
+export function setPeerLeft(v) { state.peerLeft = !!v; render(); }
 export function resetOverlays() {
   state.audioOnly = false;
   state.frozen = false;
   state.recovering = false;
+  state.peerLeft = false;
   state.attempt = 0;
   state.recoveryReason = '';
   render();
@@ -77,19 +77,24 @@ export function resetOverlays() {
 export function updateQualityBadge(ctx) {
   const el = $('qualityBadge');
   if (!el) return;
+  if (ctx.peerLeft) {
+    el.textContent = '⛌ Собеседник вышел';
+    el.dataset.level = 'idle';
+    return;
+  }
   if (ctx.recovering) {
-    el.textContent = '⟳ Восстановление…';
+    el.textContent = '⟳ Восстановление связи';
     el.dataset.level = 'recovering';
     return;
   }
   if (ctx.audioOnly) {
-    el.textContent = '♪ Только аудио';
+    el.textContent = '♪ Только звук';
     el.dataset.level = 'audio';
     return;
   }
   const q = ctx.qoeScore;
   if (q == null) {
-    el.textContent = '— Нет данных';
+    el.textContent = 'Нет данных';
     el.dataset.level = 'idle';
     return;
   }

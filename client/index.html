@@ -39,21 +39,27 @@
         <video id="remoteVideo" autoplay playsinline></video>
         <div class="video-label">Удалённый</div>
 
-        <!-- Оверлеи поверх удалённого видео, приоритет recovery > frozen > audio -->
+        <!-- Оверлеи поверх удалённого видео.
+             Приоритет: peer-left > recovery > frozen > audio. -->
         <div id="overlayAudioOnly" class="video-overlay overlay-audio">
           <div class="overlay-icon">♪</div>
-          <div class="overlay-title">Видео отключено</div>
-          <div class="overlay-text">Сеть нестабильна — продолжаем только аудио</div>
+          <div class="overlay-title">Сейчас только звук</div>
+          <div class="overlay-text">Видео отключилось из-за слабой сети.</div>
         </div>
         <div id="overlayFrozen" class="video-overlay overlay-freeze">
           <div class="overlay-spinner"></div>
-          <div class="overlay-title">Восстанавливаем картинку…</div>
-          <div class="overlay-text">Сигнал ослаб, ждём новый ключевой кадр</div>
+          <div class="overlay-title">Изображение замерло</div>
+          <div class="overlay-text">Видеосигнал восстанавливается.</div>
         </div>
         <div id="overlayRecovery" class="video-overlay overlay-recovery">
           <div class="overlay-spinner"></div>
-          <div class="overlay-title">Восстанавливаем соединение…</div>
-          <div class="overlay-text" id="overlayRecoveryAttempt"></div>
+          <div class="overlay-title">Соединение восстанавливается</div>
+          <div class="overlay-text" id="overlayRecoveryAttempt">Подождите несколько секунд.</div>
+        </div>
+        <div id="overlayPeerLeft" class="video-overlay overlay-peer-left">
+          <div class="overlay-icon">⛌</div>
+          <div class="overlay-title">Собеседник вышел из звонка</div>
+          <div class="overlay-text">Если он вернётся, видеосвязь продолжится автоматически.</div>
         </div>
       </div>
     </section>
