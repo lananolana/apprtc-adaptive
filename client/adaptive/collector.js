@@ -18,6 +18,10 @@
 //     frameWidth:  number | null,
 //     frameHeight: number | null,
 //     framesDropped: number | null,
+//     // Входящие потоки — нужны для детекции фриза и восстановления соединения:
+//     inboundVideoFramesReceived: number | null,  // абсолютное (кумулятивное)
+//     inboundVideoBytesReceived:  number | null,
+//     inboundAudioBytesReceived:  number | null,
 //   }
 
 let prev = null;
@@ -62,6 +66,7 @@ async function sample(pc) {
   const outV  = pickOutbound(report, 'video');
   const outA  = pickOutbound(report, 'audio');
   const inV   = pickInbound(report, 'video');
+  const inA   = pickInbound(report, 'audio');
 
   const out = {
     ts: now,
@@ -77,6 +82,9 @@ async function sample(pc) {
     framesDropped: outV?.framesEncoded != null && outV?.framesSent != null
       ? outV.framesEncoded - outV.framesSent
       : null,
+    inboundVideoFramesReceived: inV?.framesReceived ?? null,
+    inboundVideoBytesReceived:  inV?.bytesReceived  ?? null,
+    inboundAudioBytesReceived:  inA?.bytesReceived  ?? null,
   };
 
   if (prev && outV && prev.outV) {

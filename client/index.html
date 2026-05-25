@@ -19,6 +19,14 @@
       <label><input type="radio" name="mode" value="baseline" checked /> baseline</label>
       <label><input type="radio" name="mode" value="adaptive" /> adaptive</label>
     </div>
+
+    <div id="qualityBadge" data-level="idle" title="Текущая оценка качества соединения">— Нет данных</div>
+
+    <div class="record-controls" title="Запись телеметрии в CSV для эксперимента">
+      <input id="profileInput" type="text" placeholder="profile (good/3g/edge/lossy/severe)" autocomplete="off" />
+      <button id="markBtn" type="button" title="Пометить смену профиля внутри одной записи">Mark</button>
+      <button id="recordBtn" type="button">● Старт записи</button>
+    </div>
   </header>
 
   <main class="stage">
@@ -30,6 +38,23 @@
       <div class="video-card">
         <video id="remoteVideo" autoplay playsinline></video>
         <div class="video-label">Удалённый</div>
+
+        <!-- Оверлеи поверх удалённого видео, приоритет recovery > frozen > audio -->
+        <div id="overlayAudioOnly" class="video-overlay overlay-audio">
+          <div class="overlay-icon">♪</div>
+          <div class="overlay-title">Видео отключено</div>
+          <div class="overlay-text">Сеть нестабильна — продолжаем только аудио</div>
+        </div>
+        <div id="overlayFrozen" class="video-overlay overlay-freeze">
+          <div class="overlay-spinner"></div>
+          <div class="overlay-title">Восстанавливаем картинку…</div>
+          <div class="overlay-text">Сигнал ослаб, ждём новый ключевой кадр</div>
+        </div>
+        <div id="overlayRecovery" class="video-overlay overlay-recovery">
+          <div class="overlay-spinner"></div>
+          <div class="overlay-title">Восстанавливаем соединение…</div>
+          <div class="overlay-text" id="overlayRecoveryAttempt"></div>
+        </div>
       </div>
     </section>
 
@@ -58,6 +83,9 @@
     <span id="statusText">Готов к подключению.</span>
     <span class="meta">режим: <b id="modeLabel">baseline</b></span>
   </footer>
+
+  <!-- Контейнер для toast-уведомлений (правый нижний угол) -->
+  <div id="toastContainer"></div>
 
   <script type="module" src="/app.js"></script>
 </body>

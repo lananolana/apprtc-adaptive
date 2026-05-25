@@ -21,6 +21,11 @@ export class Aggregator {
       fps: null, frameWidth: null, frameHeight: null,
       framesDropped: 0,
       qoeScore: null,
+      // Прокидываем «сырые» кумулятивные метрики входящего трафика
+      // дальше — FreezeDetector и RecoveryManager используют их без сглаживания.
+      inboundVideoFramesReceived: null,
+      inboundVideoBytesReceived:  null,
+      inboundAudioBytesReceived:  null,
     };
     this.lastLost = null;
     this.lastRecv = null;
@@ -53,6 +58,10 @@ export class Aggregator {
     if (raw.framesDropped != null && raw.framesDropped > s.framesDropped) {
       s.framesDropped = raw.framesDropped;
     }
+    // Сырые входящие метрики — без EMA, нужны как монотонные счётчики
+    s.inboundVideoFramesReceived = raw.inboundVideoFramesReceived ?? s.inboundVideoFramesReceived;
+    s.inboundVideoBytesReceived  = raw.inboundVideoBytesReceived  ?? s.inboundVideoBytesReceived;
+    s.inboundAudioBytesReceived  = raw.inboundAudioBytesReceived  ?? s.inboundAudioBytesReceived;
     s.qoeScore = this.qoe();
     return { ...s };
   }
