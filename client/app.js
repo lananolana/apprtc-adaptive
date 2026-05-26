@@ -334,7 +334,12 @@ function startTelemetry() {
       recorder.noteDecision(decision);
       handlePolicyDecision(decision);
     }
-    renderMetrics(smoothed, { mode, decision });
+    renderMetrics(smoothed, {
+      mode,
+      decision,
+      iceState: pc?.iceConnectionState,
+      pcState: pc?.connectionState,
+    });
     recorder.record(smoothed, mode);
 
     // UX-наблюдатели поверх адаптивного слоя.

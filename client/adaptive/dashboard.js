@@ -15,6 +15,8 @@ function qoeLabel(score) {
 let lastAction = '—';
 
 export function renderMetrics(stats, ctx) {
+  $('m-ice').textContent     = ctx?.iceState ?? '—';
+  $('m-pc').textContent      = ctx?.pcState  ?? '—';
   $('m-rtt').textContent     = fmt(stats.rttMs, 0);
   $('m-jitter').textContent  = fmt(stats.jitterMs, 1);
   $('m-loss').textContent    = stats.lossPct != null ? fmt(stats.lossPct, 2) : '—';
