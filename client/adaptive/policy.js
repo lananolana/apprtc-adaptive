@@ -28,8 +28,12 @@ const DEFAULTS = {
   rttGoodMs:     150,
   lossBadPct:    5,
   lossGoodPct:   1,
-  audioOnlyRttMs:  800,
-  audioOnlyLossPct: 15,
+  // Условие audio-only: либо RTT > порог, либо относительные потери > порог.
+  // Требуется ≥ extremeStreakN подряд таких сэмплов, чтобы не реагировать
+  // на переходные всплески потерь при резком сужении полосы пропускания.
+  audioOnlyRttMs:    800,
+  audioOnlyLossPct:  30,
+  extremeStreakN:    2,
 };
 
 export class AdaptationPolicy {
@@ -40,9 +44,17 @@ export class AdaptationPolicy {
     this.lastSwitchAt = 0;
     this.badStreak = 0;
     this.goodStreak = 0;
+    this.extremeStreak = 0;
   }
 
-  setEnabled(v) { this.enabled = !!v; if (!v) { this.badStreak = 0; this.goodStreak = 0; } }
+  setEnabled(v) {
+    this.enabled = !!v;
+    if (!v) {
+      this.badStreak = 0;
+      this.goodStreak = 0;
+      this.extremeStreak = 0;
+    }
+  }
 
   evaluate(stats) {
     if (!this.enabled) return null;
@@ -52,12 +64,26 @@ export class AdaptationPolicy {
     const rtt  = stats.rttMs    ?? 0;
     const loss = stats.lossPct  ?? 0;
 
-    // экстремальная деградация — сразу в audio-only
-    if ((rtt > this.p.audioOnlyRttMs || loss > this.p.audioOnlyLossPct) && this.level !== AUDIO_ONLY_LEVEL) {
+    // Экстремальная деградация: требуется ≥ extremeStreakN подряд сэмплов,
+    // удовлетворяющих условию. Это защищает от ложного срабатывания на
+    // переходных всплесках потерь, типичных при резком сужении полосы
+    // пропускания (например, в первые секунды после активации эмулятора
+    // сети).
+    const extreme = rtt > this.p.audioOnlyRttMs || loss > this.p.audioOnlyLossPct;
+    if (extreme) this.extremeStreak++;
+    else this.extremeStreak = 0;
+
+    if (this.extremeStreak >= this.p.extremeStreakN && this.level !== AUDIO_ONLY_LEVEL) {
       this.level = AUDIO_ONLY_LEVEL;
       this.lastSwitchAt = now;
-      this.badStreak = 0; this.goodStreak = 0;
-      return { action: 'audioOnly', targetLevel: AUDIO_ONLY_LEVEL, reason: `extreme: rtt=${rtt|0} loss=${loss.toFixed(1)}` };
+      this.badStreak = 0;
+      this.goodStreak = 0;
+      this.extremeStreak = 0;
+      return {
+        action: 'audioOnly',
+        targetLevel: AUDIO_ONLY_LEVEL,
+        reason: `extreme x${this.p.extremeStreakN}: rtt=${rtt|0} loss=${loss.toFixed(1)}`,
+      };
     }
 
     const bad  = rtt > this.p.rttBadMs  || loss > this.p.lossBadPct;
