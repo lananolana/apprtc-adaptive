@@ -177,7 +177,11 @@ function createPeerConnection() {
     if (pc.connectionState === 'connected') {
       setStatus('Соединение установлено.');
       startTelemetry();
-    } else if (['failed', 'disconnected', 'closed'].includes(pc.connectionState)) {
+    } else if (pc.connectionState === 'closed') {
+      // Останавливаем телеметрию ТОЛЬКО при явном закрытии (hangup).
+      // При 'disconnected' / 'failed' оставляем — RecoveryManager как раз
+      // должен в этих состояниях наблюдать и инициировать ICE restart;
+      // если убить телеметрию здесь, восстановление невозможно.
       stopTelemetry();
     }
   });
@@ -241,6 +245,15 @@ async function handlePeersCount(count) {
     setAudioOnly(false);
     // очищаем удалённое видео, чтобы не висел последний кадр под оверлеем
     try { remoteVideo.srcObject = null; } catch {}
+    // Закрываем pc — без этого старое соединение остаётся в памяти,
+    // продолжает дёргать ICE и при возврате пира мы создали бы вторую
+    // параллельную сессию.
+    if (pc) {
+      try { pc.close(); } catch {}
+      pc = null;
+    }
+    // Сама телеметрия останавливается через connectionstatechange='closed'
+    // как побочный эффект pc.close().
     updateQualityBadge({ qoeScore: null, peerLeft: true });
     showToast('Собеседник вышел из звонка', { type: 'info', duration: 5000 });
     setStatus('Собеседник вышел. Можно подождать или завершить сессию.');
@@ -278,12 +291,14 @@ function startTelemetry() {
   policy = new AdaptationPolicy({ enabled: mode === 'adaptive' });
   actuator = new Actuator(pc);
 
-  // Детектор фриза удалённого видео
+  // Детектор фриза удалённого видео.
+  // Audio-only теперь живёт на локальном окне — freeze (про входящее видео)
+  // может сосуществовать одновременно, не подавляем. Подавляем только при
+  // peer-left (если пир вышел, видео не от кого).
   freezeDetector = new FreezeDetector({
     thresholdMs: 3000,
     onFreezeChange: (frozen) => {
-      // не показываем фриз ни поверх audio-only, ни если собеседник вышел
-      if (audioOnlyActive || peerLeftActive) return;
+      if (peerLeftActive) return;
       setFrozen(frozen);
       if (frozen) {
         showToast('Видеосигнал прерывается', { type: 'warn' });
@@ -364,16 +379,14 @@ function handlePolicyDecision(decision) {
     case 'audioOnly':
       audioOnlyActive = true;
       setAudioOnly(true);
-      // freeze-оверлей не нужен, когда видео осознанно выключено
-      setFrozen(false);
-      showToast('Видео отключилось из-за слабой сети', {
+      showToast('Ваше видео отключилось из-за слабой сети', {
         type: 'warn', duration: 6000,
       });
       break;
     case 'restoreVideo':
       audioOnlyActive = false;
       setAudioOnly(false);
-      showToast('Видео восстановилось', { type: 'success' });
+      showToast('Ваше видео восстановилось', { type: 'success' });
       break;
     case 'downgrade':
       // приглушённое сообщение — не спамим тостами по каждой ступени

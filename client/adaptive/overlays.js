@@ -21,26 +21,29 @@ function render() {
   const peerLeft = $('overlayPeerLeft');
   if (!audioOnly || !frozen || !recovery || !peerLeft) return;
 
-  // приоритет: peerLeft (терминальное) > recovery > frozen > audio
-  const showOnly = (which) => {
-    show(peerLeft, which === 'peerLeft');
-    show(recovery, which === 'recovery');
-    show(frozen,   which === 'frozen');
-    show(audioOnly, which === 'audio');
-  };
+  // audio-only лежит на ЛОКАЛЬНОМ видео и описывает наше исходящее.
+  // Независим от состояния входящего потока — может сосуществовать
+  // одновременно с freeze/recovery на удалённом окне.
+  show(audioOnly, state.audioOnly);
 
-  if (state.peerLeft)     return showOnly('peerLeft');
+  // На удалённом окне: peerLeft > recovery > frozen.
+  if (state.peerLeft) {
+    show(peerLeft, true); show(recovery, false); show(frozen, false);
+    return;
+  }
   if (state.recovering) {
-    showOnly('recovery');
+    show(peerLeft, false); show(recovery, true); show(frozen, false);
     const att = $('overlayRecoveryAttempt');
     if (att) att.textContent = state.attempt > 0
       ? `Попытка ${state.attempt} из 3`
       : 'Подождите несколько секунд.';
     return;
   }
-  if (state.frozen)       return showOnly('frozen');
-  if (state.audioOnly)    return showOnly('audio');
-  showOnly(null);
+  if (state.frozen) {
+    show(peerLeft, false); show(recovery, false); show(frozen, true);
+    return;
+  }
+  show(peerLeft, false); show(recovery, false); show(frozen, false);
 }
 
 function show(el, visible) {
@@ -88,7 +91,7 @@ export function updateQualityBadge(ctx) {
     return;
   }
   if (ctx.audioOnly) {
-    el.textContent = '♪ Только звук';
+    el.textContent = '♪ Видео выкл.';
     el.dataset.level = 'audio';
     return;
   }

@@ -33,7 +33,7 @@ const DEFAULTS = {
   // на переходные всплески потерь при резком сужении полосы пропускания.
   audioOnlyRttMs:    800,
   audioOnlyLossPct:  30,
-  extremeStreakN:    2,
+  extremeStreakN:    3,
 };
 
 export class AdaptationPolicy {

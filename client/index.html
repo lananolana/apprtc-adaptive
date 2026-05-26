@@ -34,18 +34,22 @@
       <div class="video-card">
         <video id="localVideo" autoplay playsinline muted></video>
         <div class="video-label">Локальный</div>
+
+        <!-- audio-only лежит на локальном видео, потому что управляющее
+             решение касается ИСХОДЯЩЕГО видео — собеседник перестаёт нас
+             видеть, мы же его видим как обычно. -->
+        <div id="overlayAudioOnly" class="video-overlay overlay-audio">
+          <div class="overlay-icon">♪</div>
+          <div class="overlay-title">Ваше видео отключено</div>
+          <div class="overlay-text">Сеть слабая — собеседник вас сейчас не видит.</div>
+        </div>
       </div>
       <div class="video-card">
         <video id="remoteVideo" autoplay playsinline></video>
         <div class="video-label">Удалённый</div>
 
-        <!-- Оверлеи поверх удалённого видео.
-             Приоритет: peer-left > recovery > frozen > audio. -->
-        <div id="overlayAudioOnly" class="video-overlay overlay-audio">
-          <div class="overlay-icon">♪</div>
-          <div class="overlay-title">Сейчас только звук</div>
-          <div class="overlay-text">Видео отключилось из-за слабой сети.</div>
-        </div>
+        <!-- Оверлеи поверх удалённого видео. Описывают состояние входящего
+             потока. Приоритет: peer-left > recovery > frozen. -->
         <div id="overlayFrozen" class="video-overlay overlay-freeze">
           <div class="overlay-spinner"></div>
           <div class="overlay-title">Изображение замерло</div>

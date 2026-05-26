@@ -4,12 +4,13 @@
 // free hosting tiers (Render.com / Fly.io / Railway).
 //
 // Protocol (JSON over WS):
-//   { type: 'join',  roomId }                    — register, server replies with 'joined' incl. role
-//   { type: 'peers', roomId, peers: [...] }      — broadcast on join/leave
-//   { type: 'offer', roomId, sdp }               — forward to other peer in the room
-//   { type: 'answer', roomId, sdp }              — forward to other peer in the room
-//   { type: 'candidate', roomId, candidate }     — forward to other peer in the room
-//   { type: 'bye',   roomId }                    — forward, close
+//   { type: 'join',  roomId }                        — register, server replies with 'joined' incl. role
+//   { type: 'peers', roomId, count: number }         — broadcast on join/leave
+//   { type: 'offer', roomId, sdp }                   — forward to other peer in the room
+//   { type: 'answer', roomId, sdp }                  — forward to other peer in the room
+//   { type: 'candidate', roomId, candidate }         — forward to other peer in the room
+//   { type: 'restart-request', roomId }              — callee asks caller to initiate ICE restart
+//   { type: 'bye',   roomId }                        — forward, close
 //
 // A "room" holds up to 2 sockets. Third joiner is rejected with 'full'.
 
@@ -120,7 +121,7 @@ wss.on('connection', (socket) => {
     }
 
     // forwarded message types
-    if (['offer', 'answer', 'candidate', 'bye'].includes(msg.type) && socket.roomId) {
+    if (['offer', 'answer', 'candidate', 'restart-request', 'bye'].includes(msg.type) && socket.roomId) {
       broadcast(socket.roomId, socket, msg);
       if (msg.type === 'bye') leaveRoom(socket);
     }

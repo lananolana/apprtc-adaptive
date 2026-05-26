@@ -69,6 +69,14 @@ export class RecoveryManager {
     const ice = this.pc.iceConnectionState;
     const conn = this.pc.connectionState;
 
+    // Если связь стабильна — обнуляем счётчик попыток. Иначе после первой
+    // удачи (ICE сам восстановился) мы бы накопили attempts и при следующей
+    // проблеме могли уйти в giveUp слишком рано.
+    const isHealthy = (ice === 'connected' || ice === 'completed') && conn === 'connected';
+    if (isHealthy && this.attempts > 0) {
+      this.attempts = 0;
+    }
+
     // failed → немедленно
     if (ice === 'failed') {
       this._trigger('iceConnectionState=failed');
@@ -102,6 +110,10 @@ export class RecoveryManager {
     if (this.recovering) {
       this.recovering = false;
       this.attempts = 0;
+      // giveUp сбрасываем, чтобы при следующей проблеме можно было снова
+      // запустить серию попыток (иначе после однократного провала
+      // RecoveryManager отключился бы навсегда для текущей сессии).
+      this.giveUp = false;
       this.lastBytesGrowAt = performance.now();
       this.cb.onRecoverySuccess?.();
     }
