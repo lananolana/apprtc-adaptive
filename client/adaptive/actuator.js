@@ -1,19 +1,44 @@
-// actuator.js — исполнитель решений политики.
+// actuator.js — исполнитель решений политики с поддержкой двусторонней
+// кооперативной адаптации.
 //
-// Применяет действия к локальному медиа и к RTCRtpSender:
+// Каждое решение локальной политики обновляет this.localLevel — желаемый
+// уровень качества на основании СВОИХ условий сети.
+// При получении сообщения 'remote-constraint' от собеседника обновляется
+// this.remoteLevel — максимальный уровень, который собеседник готов
+// принимать от нас (исходя из ЕГО условий сети).
+// Фактически применяемый уровень = MIN(localLevel, remoteLevel).
+//
+// Это позволяет реализовать кооперативную адаптацию: если у собеседника
+// плохая сеть, он сообщает нам ограничение, и мы автоматически снижаем
+// исходящее качество, не дожидаясь, пока ЕГО downlink-канал «продавится»
+// и GCC через RTCP-обратную связь придёт к тому же результату.
+//
 //   - LADDER → setParameters() с scaleResolutionDownBy + maxFramerate + maxBitrate.
 //     MediaStreamTrack.applyConstraints не используется, чтобы не вызывать
 //     перезахват камеры (видимое «мигание»).
-//   - audioOnly → track.enabled = false + encodings[0].active = false.
-//   - restoreVideo → track.enabled = true + _applyLevel(targetLevel).
+//   - audioOnly (level=-1) → track.enabled=false + encodings[0].active=false.
+//   - restoreVideo (level=0) → track.enabled=true + _applyLevel(0).
 
-import { LADDER, AUDIO_ONLY_LEVEL } from '/adaptive/policy.js';
+import { LADDER, AUDIO_ONLY_LEVEL } from './policy.js';
+
+const TOP_LEVEL = LADDER.length - 1;
 
 export class Actuator {
   /** @param {RTCPeerConnection} pc */
   constructor(pc) {
     this.pc = pc;
-    this.currentLevel = LADDER.length - 1;
+    // Уровни ступени, запрашиваемые двумя независимыми сторонами.
+    // localLevel: что наша локальная политика хочет применить (по нашим
+    //   условиям сети).
+    // remoteLevel: какой максимум собеседник готов принимать (по ЕГО
+    //   условиям сети, получено через 'remote-constraint').
+    // Применяется MIN(localLevel, remoteLevel) к нашему отправителю.
+    this.localLevel  = TOP_LEVEL;
+    this.remoteLevel = TOP_LEVEL;
+    this.appliedLevel = TOP_LEVEL;
+    // последнее применённое состояние audio-only (чтобы понимать, надо
+    // ли явно включить трек обратно при выходе)
+    this.audioOnlyApplied = false;
   }
 
   videoSender() {
@@ -23,21 +48,64 @@ export class Actuator {
     return this.pc.getSenders().find(s => s.track && s.track.kind === 'audio');
   }
 
+  /**
+   * Применить решение локальной политики.
+   * Обновляет localLevel и применяет MIN(local, remote).
+   */
   async apply(decision) {
     if (!decision) return;
     switch (decision.action) {
       case 'downgrade':
       case 'upgrade':
-        await this._applyLevel(decision.targetLevel);
+        this.localLevel = decision.targetLevel;
         break;
       case 'audioOnly':
-        await this._goAudioOnly();
+        this.localLevel = AUDIO_ONLY_LEVEL;
         break;
       case 'restoreVideo':
-        await this._restoreVideo(decision.targetLevel);
+        this.localLevel = decision.targetLevel; // обычно 0
         break;
     }
-    this.currentLevel = decision.targetLevel;
+    await this._applyEffective();
+  }
+
+  /**
+   * Обновить «ограничение от собеседника».
+   * Если собеседник передал, что у него тяжёлый канал и он не принимает
+   * выше уровня N, то наш исходящий поток ограничивается этим уровнем.
+   */
+  async setRemoteLevel(level) {
+    if (typeof level !== 'number') return;
+    // Защита от мусора в сообщении
+    if (level !== AUDIO_ONLY_LEVEL && (level < 0 || level >= LADDER.length)) return;
+    this.remoteLevel = level;
+    await this._applyEffective();
+  }
+
+  /**
+   * Возвращает MIN(localLevel, remoteLevel). AUDIO_ONLY_LEVEL = -1 — ниже
+   * любой обычной ступени, поэтому Math.min корректно его выбирает.
+   */
+  effectiveLevel() {
+    return Math.min(this.localLevel, this.remoteLevel);
+  }
+
+  /** Внутренний: применить вычисленный MIN-уровень. */
+  async _applyEffective() {
+    const eff = this.effectiveLevel();
+    if (eff === this.appliedLevel) return; // ничего не изменилось
+    this.appliedLevel = eff;
+    if (eff === AUDIO_ONLY_LEVEL) {
+      await this._goAudioOnly();
+    } else {
+      // если мы были в audio-only — восстанавливаем track перед сменой уровня
+      if (this.audioOnlyApplied) {
+        const vs = this.videoSender();
+        if (vs && vs.track) vs.track.enabled = true;
+        this.audioOnlyApplied = false;
+      }
+      await this._applyLevel(eff);
+    }
   }
 
   async _applyLevel(level) {
@@ -46,16 +114,8 @@ export class Actuator {
     const vs = this.videoSender();
     if (!vs || !vs.track) return;
 
-    // Принципиальный момент: разрешение и FPS меняем ИСКЛЮЧИТЕЛЬНО через
-    // RTCRtpSender.setParameters() (scaleResolutionDownBy + maxFramerate),
-    // не трогая MediaStreamTrack.applyConstraints. Это позволяет менять
-    // качество исходящего видеопотока без перезахвата камеры — иначе при
-    // каждой смене ступени происходила бы visible re-negotiation камеры
-    // («мигание» индикатора и кадра).
-
-    // Считаем коэффициент даунскейла относительно реального разрешения
-    // захвата камеры (берём из getSettings, чтобы корректно работать,
-    // если камера выдаёт не ровно 720p).
+    // Разрешение, FPS и битрейт — через setParameters; applyConstraints на
+    // MediaStreamTrack не вызываем, чтобы не было перезахвата камеры.
     const settings = vs.track.getSettings();
     const captureHeight = settings.height || 720;
     const scaleDown = Math.max(1, captureHeight / cfg.height);
@@ -68,11 +128,7 @@ export class Actuator {
       enc.maxBitrate    = cfg.maxBitrateKbps * 1000;
       enc.maxFramerate  = cfg.fps;
       enc.active        = true;
-      // Подсказка энкодеру, что при невозможности удерживать оба
-      // параметра одновременно — приоритет плавности (FPS), а не
-      // пространственного разрешения. Для talk-head сценария видеосвязи
-      // плавность движения мимики и губ важнее количества пикселей.
-      // По умолчанию Chrome использует 'balanced'.
+      // приоритет плавности над разрешением
       params.degradationPreference = 'maintain-framerate';
       await vs.setParameters(params);
     } catch (e) { console.warn('[actuator] setParameters failed', e); }
@@ -80,23 +136,14 @@ export class Actuator {
 
   async _goAudioOnly() {
     const vs = this.videoSender();
-    if (vs && vs.track) {
-      vs.track.enabled = false;
-      try {
-        const params = vs.getParameters();
-        if (!params.encodings || !params.encodings.length) params.encodings = [{}];
-        params.encodings[0].active = false;
-        await vs.setParameters(params);
-      } catch {}
-    }
-  }
-
-  async _restoreVideo(level) {
-    const vs = this.videoSender();
-    if (vs && vs.track) vs.track.enabled = true;
-    // _applyLevel выставит encodings[0].active = true одной операцией
-    // setParameters вместе с разрешением, FPS и битрейтом — не нужно
-    // дублировать отдельным вызовом.
-    await this._applyLevel(level);
+    if (!vs || !vs.track) return;
+    vs.track.enabled = false;
+    this.audioOnlyApplied = true;
+    try {
+      const params = vs.getParameters();
+      if (!params.encodings || !params.encodings.length) params.encodings = [{}];
+      params.encodings[0].active = false;
+      await vs.setParameters(params);
+    } catch {}
   }
 }

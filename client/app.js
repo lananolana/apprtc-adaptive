@@ -139,6 +139,14 @@ async function onSignalingMessage(ev) {
         await sendRestartOffer();
       }
       break;
+    case 'remote-constraint':
+      // Собеседник сообщает свой текущий уровень — мы ограничиваем
+      // ВЫХОДЯЩИЙ поток MIN(localLevel, remoteLevel). Если собеседник
+      // в плохой сети — мы автоматически снижаем качество отправки.
+      if (actuator && typeof msg.maxLevel === 'number') {
+        await actuator.setRemoteLevel(msg.maxLevel);
+      }
+      break;
     case 'bye':
       hangup(false);
       break;
@@ -348,6 +356,10 @@ function startTelemetry() {
       actuator.apply(decision);
       recorder.noteDecision(decision);
       handlePolicyDecision(decision);
+      // Двусторонняя кооперативная адаптация: уведомляем собеседника
+      // о нашем новом уровне. Получив это сообщение, его actuator
+      // ограничит своё исходящее качество MIN(их local, наш level).
+      sendSignal({ type: 'remote-constraint', maxLevel: decision.targetLevel });
     }
     renderMetrics(smoothed, {
       mode,
