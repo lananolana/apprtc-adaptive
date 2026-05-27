@@ -6,7 +6,10 @@
   "type": "module",
   "scripts": {
     "start": "node server/signaling.js",
-    "dev": "node server/signaling.js"
+    "dev": "node server/signaling.js",
+    "test": "node --test tests/*.test.js",
+    "test:unit": "node --test tests/aggregator.test.js tests/policy.test.js tests/freeze-detector.test.js tests/recovery.test.js tests/recorder.test.js",
+    "test:integration": "node --test tests/signaling.integration.test.js"
   },
   "dependencies": {
     "ws": "^8.18.0"

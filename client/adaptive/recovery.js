@@ -42,7 +42,11 @@ export class RecoveryManager {
     this.disconnectedSince = null;
     this.lastBytesReceived = 0;
     this.lastBytesGrowAt = performance.now();
-    this.lastAttemptAt = 0;
+    // -Infinity означает «попыток ещё не было». Это эквивалентно тому,
+    // что minAttemptIntervalMs давно прошёл, и первое срабатывание не
+    // подавляется проверкой интервала (актуально для тестов и для
+    // короткоживущих сессий, в которых разрыв случается рано).
+    this.lastAttemptAt = -Infinity;
     this.giveUp = false;
   }
 
@@ -52,7 +56,7 @@ export class RecoveryManager {
     this.disconnectedSince = null;
     this.lastBytesReceived = 0;
     this.lastBytesGrowAt = performance.now();
-    this.lastAttemptAt = 0;
+    this.lastAttemptAt = -Infinity;
     this.giveUp = false;
   }
 

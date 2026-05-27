@@ -22,11 +22,23 @@ export const LADDER = [
 export const AUDIO_ONLY_LEVEL = -1;
 
 const DEFAULTS = {
-  cooldownMs:    5000,
+  // Асимметричные выдержки: после любого переключения ступени контроллер
+  // ждёт downgradeCooldownMs до следующего понижения и upgradeCooldownMs
+  // до следующего повышения. Несимметричность мотивирована поведением
+  // встроенного механизма GCC: при ухудшении полосы он реагирует
+  // постепенно (что согласуется с консервативным понижением у нас), при
+  // улучшении — быстрее (значит и повышение ступени у нас тоже должно
+  // быть оперативным).
+  downgradeCooldownMs: 5000,
+  upgradeCooldownMs:   1500,
   hysteresisN:   3,
   rttBadMs:      400,
   rttGoodMs:     150,
-  lossBadPct:    5,
+  // Порог loss для понижения ступени поднят с 5 до 10 %. Наблюдение
+  // эксперимента: при 5 % потерь и неограниченной полосе GCC + NACK
+  // справляются без снижения битрейта; наше понижение в этой зоне
+  // создаёт ущерб (падение FPS) без пользы.
+  lossBadPct:    10,
   lossGoodPct:   1,
   // Условие audio-only: либо RTT > порог, либо относительные потери > порог.
   // Требуется ≥ extremeStreakN подряд таких сэмплов, чтобы не реагировать
@@ -41,7 +53,12 @@ export class AdaptationPolicy {
     this.enabled = enabled;
     this.p = { ...DEFAULTS, ...params };
     this.level = LADDER.length - 1; // стартуем с верхней ступени
-    this.lastSwitchAt = 0;
+    // -Infinity означает «переключений ещё не было», что эквивалентно
+    // «cooldown давно прошёл». Это важно для корректной работы политики
+    // в первые секунды сессии: с 0 могла бы возникнуть ситуация, когда
+    // performance.now() < downgradeCooldownMs и первое срабатывание
+    // ошибочно откладывается.
+    this.lastSwitchAt = -Infinity;
     this.badStreak = 0;
     this.goodStreak = 0;
     this.extremeStreak = 0;
@@ -59,7 +76,9 @@ export class AdaptationPolicy {
   evaluate(stats) {
     if (!this.enabled) return null;
     const now = performance.now();
-    const cooldownOk = now - this.lastSwitchAt > this.p.cooldownMs;
+    const sinceLastSwitch = now - this.lastSwitchAt;
+    const downgradeAllowed = sinceLastSwitch > this.p.downgradeCooldownMs;
+    const upgradeAllowed   = sinceLastSwitch > this.p.upgradeCooldownMs;
 
     const rtt  = stats.rttMs    ?? 0;
     const loss = stats.lossPct  ?? 0;
@@ -93,9 +112,8 @@ export class AdaptationPolicy {
     else if (good) { this.goodStreak++; this.badStreak = 0; }
     else { this.badStreak = 0; this.goodStreak = 0; }
 
-    if (!cooldownOk) return null;
-
-    if (this.badStreak >= this.p.hysteresisN) {
+    // Понижение ступени — только при выдержке downgradeCooldownMs.
+    if (this.badStreak >= this.p.hysteresisN && downgradeAllowed) {
       if (this.level === AUDIO_ONLY_LEVEL) return null; // уже на дне
       if (this.level > 0) {
         this.level--;
@@ -104,7 +122,9 @@ export class AdaptationPolicy {
         return { action: 'downgrade', targetLevel: this.level, reason: `bad streak: rtt=${rtt|0} loss=${loss.toFixed(1)}` };
       }
     }
-    if (this.goodStreak >= this.p.hysteresisN) {
+    // Повышение ступени и возврат из audio-only — при более короткой
+    // выдержке upgradeCooldownMs.
+    if (this.goodStreak >= this.p.hysteresisN && upgradeAllowed) {
       if (this.level === AUDIO_ONLY_LEVEL) {
         this.level = 0;
         this.lastSwitchAt = now;

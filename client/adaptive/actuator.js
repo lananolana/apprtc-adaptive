@@ -68,6 +68,12 @@ export class Actuator {
       enc.maxBitrate    = cfg.maxBitrateKbps * 1000;
       enc.maxFramerate  = cfg.fps;
       enc.active        = true;
+      // Подсказка энкодеру, что при невозможности удерживать оба
+      // параметра одновременно — приоритет плавности (FPS), а не
+      // пространственного разрешения. Для talk-head сценария видеосвязи
+      // плавность движения мимики и губ важнее количества пикселей.
+      // По умолчанию Chrome использует 'balanced'.
+      params.degradationPreference = 'maintain-framerate';
       await vs.setParameters(params);
     } catch (e) { console.warn('[actuator] setParameters failed', e); }
   }

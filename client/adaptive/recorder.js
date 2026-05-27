@@ -12,6 +12,11 @@ const COLUMNS = [
   'fps', 'frameWidth', 'frameHeight',
   'framesDropped', 'qoeScore',
   'adaptAction', 'adaptLevel',
+  // Входящие кумулятивные счётчики — нужны для расширенных метрик
+  // анализа (число замираний, доля «полезного» видеосигнала на приёме).
+  'inboundVideoFramesReceived',
+  'inboundVideoBytesReceived',
+  'inboundAudioBytesReceived',
 ];
 
 function csvEscape(v) {
@@ -72,6 +77,9 @@ export class Recorder {
       qoeScore: stats.qoeScore ?? '',
       adaptAction: this.lastDecision?.action ?? '',
       adaptLevel: this.lastDecision?.targetLevel ?? '',
+      inboundVideoFramesReceived: stats.inboundVideoFramesReceived ?? '',
+      inboundVideoBytesReceived:  stats.inboundVideoBytesReceived  ?? '',
+      inboundAudioBytesReceived:  stats.inboundAudioBytesReceived  ?? '',
     };
     this.rows.push(row);
     // event «вспышечный»: проявляется один раз после mark(), далее — пусто
