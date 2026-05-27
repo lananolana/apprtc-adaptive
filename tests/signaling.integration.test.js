@@ -183,6 +183,40 @@ describe('Signaling server (integration)', () => {
     a.close(); b.close();
   });
 
+  test('bye → rejoin того же клиента: повторно получает joined, бывший callee получает peers=2', async () => {
+    // Сценарий: A и B в комнате. A нажимает «Завершить» (отправляет 'bye',
+    // закрывает ws). Затем A снова заходит в ту же комнату. Server должен
+    // вернуть его в комнату; B должен получить peers count=2 и сможет
+    // инициировать новый offer-answer обмен.
+    const a1 = await connect();
+    const b = await connect();
+    send(a1, { type: 'join', roomId: 'r-rejoin' });
+    await wait(50);
+    send(b, { type: 'join', roomId: 'r-rejoin' });
+    await wait(100);
+    // A завершает звонок и закрывает соединение
+    send(a1, { type: 'bye' });
+    a1.close();
+    await wait(150);
+    // A заходит заново
+    const a2 = await connect();
+    const msgsA2 = collect(a2);
+    const msgsB = collect(b);
+    send(a2, { type: 'join', roomId: 'r-rejoin' });
+    await wait(150);
+    // Поскольку B уже в комнате один, повторно зашедший A получает callee.
+    // (Это известное поведение server'а; клиент компенсирует ролевый сдвиг
+    // на своей стороне, делая существующего пира инициатором.)
+    assert.ok(msgsA2.some(m => m.type === 'joined' && m.role === 'callee'),
+      'после rejoin A должен получить роль callee — B уже в комнате');
+    assert.ok(msgsB.some(m => m.type === 'peers' && m.count === 2),
+      'B должен получить peers=2 при возвращении A');
+    // комната не должна быть переполнена
+    assert.ok(!msgsA2.some(m => m.type === 'full'),
+      'rejoin не должен приводить к full — A был удалён по bye');
+    a2.close(); b.close();
+  });
+
   test('пустой/невалидный JSON игнорируется без падения', async () => {
     const ws = await connect();
     send(ws, { type: 'join', roomId: 'r9' });

@@ -235,8 +235,13 @@ async function handleOffer(sdp) {
  * 1 — мы остались одни. Если до этого было 2, значит собеседник вышел —
  *     переходим в терминальное состояние "peer left" и гасим попытки
  *     восстановления (восстанавливать некого).
- * 2 — двое в комнате. Если до этого было 1 и мы caller — инициируем offer
- *     (как при первом установлении или если пир вернулся после выхода).
+ * 2 — двое в комнате. Это сообщение приходит только СУЩЕСТВУЮЩЕМУ пиру
+ *     (server.broadcast исключает отправителя join'а), поэтому именно мы
+ *     должны инициировать offer — независимо от того, какую роль нам
+ *     присвоил server в исходном цикле. Это важно для сценария
+ *     «A → bye → A повторно входит»: server тогда даёт A роль callee,
+ *     но никто, кроме B (нас), не получит peers=2 и не сможет начать
+ *     SDP-обмен. Поэтому мы здесь явно становимся caller'ом.
  */
 async function handlePeersCount(count) {
   const prev = lastPeerCount;
@@ -253,7 +258,11 @@ async function handlePeersCount(count) {
       setPeerLeft(false);
       showToast('Собеседник вернулся', { type: 'success', duration: 3000 });
     }
-    if (role === 'caller') await createOffer();
+    // Существующий в комнате пир всегда становится инициатором следующего
+    // offer-answer обмена (и, соответственно, обработчиком 'restart-request'
+    // в дальнейшем). Это снимает рассинхрон ролей после цикла bye → rejoin.
+    role = 'caller';
+    await createOffer();
     return;
   }
 
@@ -301,6 +310,10 @@ function handlePeerHangup() {
   try { remoteVideo.srcObject = null; } catch {}
   if (pc) { try { pc.close(); } catch {} pc = null; }
   stopTelemetryButKeepPeerLeft();
+  // Мы остались одни в комнате. Явно фиксируем это, чтобы следующее
+  // сообщение peers=1, которое сервер пришлёт после bye, не перетёрло
+  // наш 'hangup'-оверлей дефолтным 'left'-текстом.
+  lastPeerCount = 1;
   updateQualityBadge({ qoeScore: null, peerLeft: true });
   showToast('Собеседник завершил звонок', { type: 'info', duration: 5000 });
   setStatus('Собеседник завершил звонок. Нажмите «Завершить», чтобы выйти.');
