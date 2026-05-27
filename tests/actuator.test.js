@@ -77,27 +77,31 @@ describe('Actuator (двусторонняя кооперативная адап
     assert.equal(a.effectiveLevel(), 1); // remote ограничивает
   });
 
-  test('remote audio-only заставляет нас тоже отключить видео', async () => {
+  test('удалённый audio-only НЕ переводит нас в audio-only (только локальная политика может)', async () => {
     const pc = makeMockPc();
     const a = new Actuator(pc);
     // местная политика не паникует
     assert.equal(a.localLevel, LADDER.length - 1);
     assert.equal(pc._sender._trackState.enabled, true);
-    // но собеседник сообщил audio-only
+    // собеседник сообщил «audio-only» (он сам в audio-only локально)
     await a.setRemoteLevel(AUDIO_ONLY_LEVEL);
-    assert.equal(a.effectiveLevel(), AUDIO_ONLY_LEVEL);
-    // наше видео отключено
-    assert.equal(pc._sender._trackState.enabled, false);
+    // мы НЕ переходим в audio-only — оставляем нижнюю ступень видео
+    assert.equal(a.effectiveLevel(), 0);
+    // видеотрек остаётся включён
+    assert.equal(pc._sender._trackState.enabled, true);
   });
 
-  test('выход из audio-only: при remote=0 видеотрек включается обратно', async () => {
+  test('симметричный audio-only возникает только если ОБЕ стороны независимо решили audio-only', async () => {
     const pc = makeMockPc();
     const a = new Actuator(pc);
-    await a.setRemoteLevel(AUDIO_ONLY_LEVEL);
+    // ЛОКАЛЬНАЯ политика решила audio-only
+    await a.apply({ action: 'audioOnly', targetLevel: AUDIO_ONLY_LEVEL });
     assert.equal(pc._sender._trackState.enabled, false);
-    // remote сообщил, что готов принимать снова (на нижней ступени)
-    await a.setRemoteLevel(0);
-    assert.equal(pc._sender._trackState.enabled, true);
+    // плюс удалённая сторона тоже в audio-only
+    await a.setRemoteLevel(AUDIO_ONLY_LEVEL);
+    // оба согласны → audio-only
+    assert.equal(a.effectiveLevel(), AUDIO_ONLY_LEVEL);
+    assert.equal(pc._sender._trackState.enabled, false);
   });
 
   test('local audio-only — track отключается', async () => {

@@ -10,6 +10,7 @@ const state = {
   frozen: false,
   recovering: false,
   peerLeft: false,
+  peerLeftReason: 'left',   // 'left' (соединение пропало) | 'hangup' (явное завершение)
   recoveryReason: '',
   attempt: 0,
 };
@@ -59,7 +60,22 @@ export function setRecovering(v, attempt = 0, reason = '') {
   state.recoveryReason = reason;
   render();
 }
-export function setPeerLeft(v) { state.peerLeft = !!v; render(); }
+export function setPeerLeft(v, reason = 'left') {
+  state.peerLeft = !!v;
+  state.peerLeftReason = reason;
+  if (v) {
+    const title = document.querySelector('#overlayPeerLeft .overlay-title');
+    const text  = document.querySelector('#overlayPeerLeft .overlay-text');
+    if (reason === 'hangup') {
+      if (title) title.textContent = 'Собеседник завершил звонок';
+      if (text)  text.textContent  = 'Звонок окончен. Можно создать новый или закрыть вкладку.';
+    } else {
+      if (title) title.textContent = 'Собеседник вышел из звонка';
+      if (text)  text.textContent  = 'Если он вернётся, видеосвязь продолжится автоматически.';
+    }
+  }
+  render();
+}
 export function resetOverlays() {
   state.audioOnly = false;
   state.frozen = false;

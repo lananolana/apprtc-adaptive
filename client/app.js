@@ -148,7 +148,7 @@ async function onSignalingMessage(ev) {
       }
       break;
     case 'bye':
-      hangup(false);
+      handlePeerHangup();
       break;
     case 'full':
       setStatus(`Комната ${msg.roomId} уже занята двумя участниками.`);
@@ -156,6 +156,18 @@ async function onSignalingMessage(ev) {
     case 'error':
       setStatus(`Ошибка сигналинга: ${msg.reason}`);
       break;
+  }
+}
+
+/**
+ * Включить все треки локального потока. Вызывается при начале новой сессии
+ * (вход в комнату, возврат собеседника), чтобы исключить «осиротевшее»
+ * track.enabled=false от предыдущей сессии в режиме audio-only.
+ */
+function ensureLocalTracksEnabled() {
+  if (!localStream) return;
+  for (const t of localStream.getTracks()) {
+    if (!t.enabled) t.enabled = true;
   }
 }
 
@@ -231,7 +243,11 @@ async function handlePeersCount(count) {
   lastPeerCount = count;
 
   if (count === 2 && prev <= 1) {
-    // собеседник пришёл (или вернулся) — гасим peer-left, готовим звонок
+    // собеседник пришёл (или вернулся) — гасим peer-left, готовим звонок.
+    // Защитно включаем все локальные треки: если перед предыдущим выходом
+    // мы были в audio-only, video track остался enabled=false, и без сброса
+    // собеседник на новой сессии увидел бы у нас чёрный экран.
+    ensureLocalTracksEnabled();
     if (peerLeftActive) {
       peerLeftActive = false;
       setPeerLeft(false);
@@ -268,6 +284,36 @@ async function handlePeersCount(count) {
   }
 }
 
+/**
+ * Реакция на 'bye' от собеседника. Отличается от peer-left по тому, что
+ * это явное намерение завершить, а не временная потеря связи. Показываем
+ * соответствующий оверлей и тихо подчищаем pc, но не закрываем нашу
+ * сессию полностью — пользователь сам решит, когда нажать «Завершить».
+ */
+function handlePeerHangup() {
+  peerLeftActive = true;
+  setPeerLeft(true, 'hangup');
+  setFrozen(false);
+  setRecovering(false);
+  recoveryActive = false;
+  audioOnlyActive = false;
+  setAudioOnly(false);
+  try { remoteVideo.srcObject = null; } catch {}
+  if (pc) { try { pc.close(); } catch {} pc = null; }
+  stopTelemetryButKeepPeerLeft();
+  updateQualityBadge({ qoeScore: null, peerLeft: true });
+  showToast('Собеседник завершил звонок', { type: 'info', duration: 5000 });
+  setStatus('Собеседник завершил звонок. Нажмите «Завершить», чтобы выйти.');
+}
+
+/** Остановить телеметрию, но сохранить состояние peer-left для UI. */
+function stopTelemetryButKeepPeerLeft() {
+  if (collectorHandle) { collectorHandle.stop(); collectorHandle = null; }
+  aggregator = null; policy = null; actuator = null;
+  freezeDetector = null;
+  recoveryManager = null;
+}
+
 /** Перепогон ICE: caller формирует новый offer с iceRestart: true. */
 async function sendRestartOffer() {
   if (!pc) return;
@@ -283,6 +329,9 @@ function hangup(notifyRemote) {
   if (pc) { try { pc.close(); } catch {} pc = null; }
   if (ws) { try { ws.close(); } catch {} ws = null; }
   remoteVideo.srcObject = null;
+  // Перед возможным повторным «Войти» сбрасываем track.enabled — иначе
+  // следующая сессия может начаться с выключенным видеотреком.
+  ensureLocalTracksEnabled();
   lastPeerCount = 0;
   resetOverlays();
   updateQualityBadge({ qoeScore: null });
@@ -357,9 +406,12 @@ function startTelemetry() {
       recorder.noteDecision(decision);
       handlePolicyDecision(decision);
       // Двусторонняя кооперативная адаптация: уведомляем собеседника
-      // о нашем новом уровне. Получив это сообщение, его actuator
-      // ограничит своё исходящее качество MIN(их local, наш level).
-      sendSignal({ type: 'remote-constraint', maxLevel: decision.targetLevel });
+      // о нашем уровне ограничения. Капаем снизу нулём — даже если мы
+      // ушли локально в audio-only, B продолжает слать нам видеопоток
+      // самого низкого качества (180p@10 ~150 кбит/с). Это сохраняет
+      // визуальный контакт собеседника даже при нашей деградации сети.
+      const maxLevel = Math.max(0, decision.targetLevel);
+      sendSignal({ type: 'remote-constraint', maxLevel });
     }
     renderMetrics(smoothed, {
       mode,
