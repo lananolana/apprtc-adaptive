@@ -102,16 +102,16 @@ describe('AdaptationPolicy', () => {
 
   test('audioOnly срабатывает после extremeStreakN подряд сэмплов', () => {
     const p = new AdaptationPolicy({ enabled: true });
-    // 2 экстремальных — ещё нет audio-only
+    // extremeStreakN=4 в v4 — три первых ещё не дают audio-only
+    for (let i = 0; i < 3; i++) {
+      tickMs(1000);
+      const d = p.evaluate(EXTREME);
+      assert.notEqual(d?.action, 'audioOnly',
+        `на ${i+1}-м сэмпле audio-only не должен срабатывать (нужно 4 подряд)`);
+    }
+    // 4-й — audio-only
     tickMs(1000);
-    let d = p.evaluate(EXTREME);
-    assert.notEqual(d?.action, 'audioOnly');
-    tickMs(1000);
-    d = p.evaluate(EXTREME);
-    assert.notEqual(d?.action, 'audioOnly');
-    // 3-й — audio-only
-    tickMs(1000);
-    d = p.evaluate(EXTREME);
+    const d = p.evaluate(EXTREME);
     assert.equal(d?.action, 'audioOnly');
     assert.equal(p.level, AUDIO_ONLY_LEVEL);
   });
@@ -127,8 +127,8 @@ describe('AdaptationPolicy', () => {
 
   test('restoreVideo возвращает из audio-only на нижнюю ступень', () => {
     const p = new AdaptationPolicy({ enabled: true });
-    // переходим в audio-only
-    for (let i = 0; i < 3; i++) { tickMs(1000); p.evaluate(EXTREME); }
+    // переходим в audio-only (extremeStreakN=4 в v4)
+    for (let i = 0; i < 4; i++) { tickMs(1000); p.evaluate(EXTREME); }
     assert.equal(p.level, AUDIO_ONLY_LEVEL);
     // 3 хороших сэмпла + upgrade cooldown 1500мс
     tickMs(800); p.evaluate(GOOD);
