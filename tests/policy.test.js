@@ -18,8 +18,15 @@ function restoreClock() { globalThis.performance = realPerformance; }
 
 // --- хелперы -----------------------------------------------------------
 const GOOD  = { rttMs: 30,  lossPct: 0 };
-const BAD   = { rttMs: 500, lossPct: 7 };
-const EXTREME = { rttMs: 1000, lossPct: 50 };
+const BAD   = { rttMs: 500, lossPct: 8 };
+// v3: audio-only требует одновременно высокий RTT (>2000) И высокий loss (>15).
+// EXTREME удовлетворяет обоим, чтобы дойти до audio-only ветки.
+const EXTREME = { rttMs: 2500, lossPct: 50 };
+// «высокий RTT, но умеренные потери» — типичный edge-канал; audio-only
+// сработать не должен.
+const EDGE_LIKE = { rttMs: 2500, lossPct: 5 };
+// «высокие потери, но низкий RTT» — переходный спайк; audio-only тоже нет.
+const LOSS_SPIKE = { rttMs: 100, lossPct: 50 };
 
 describe('AdaptationPolicy', () => {
   beforeEach(setupClock);
@@ -132,27 +139,52 @@ describe('AdaptationPolicy', () => {
     assert.equal(p.level, 0); // нижняя ступень
   });
 
-  test('lossBadPct=10: 5% потерь не вызывает downgrade', () => {
+  test('lossBadPct=7 (v3): 3% потерь не вызывает downgrade', () => {
     const p = new AdaptationPolicy({ enabled: true });
-    const FIVE_PERCENT = { rttMs: 100, lossPct: 5 };
+    const THREE_PERCENT = { rttMs: 100, lossPct: 3 };
     for (let i = 0; i < 5; i++) {
       tickMs(1000);
-      const d = p.evaluate(FIVE_PERCENT);
-      assert.equal(d, null); // никаких переключений
+      const d = p.evaluate(THREE_PERCENT);
+      assert.equal(d, null);
     }
     assert.equal(p.level, LADDER.length - 1);
   });
 
-  test('lossBadPct=10: 15% потерь вызывает downgrade', () => {
+  test('lossBadPct=7 (v3): 10% потерь вызывает downgrade', () => {
     const p = new AdaptationPolicy({ enabled: true });
-    const FIFTEEN_PERCENT = { rttMs: 100, lossPct: 15 };
+    const TEN_PERCENT = { rttMs: 100, lossPct: 10 };
     let switched = false;
     for (let i = 0; i < 10; i++) {
       tickMs(1000);
-      const d = p.evaluate(FIFTEEN_PERCENT);
+      const d = p.evaluate(TEN_PERCENT);
       if (d?.action === 'downgrade') switched = true;
     }
     assert.equal(switched, true);
+  });
+
+  test('AND-логика audio-only (v3): высокий RTT при умеренных потерях не вызывает audio-only', () => {
+    const p = new AdaptationPolicy({ enabled: true });
+    // эмулируем edge-канал: rtt=2500, loss=5 — НЕ должно вырубать видео
+    for (let i = 0; i < 10; i++) {
+      tickMs(1000);
+      const d = p.evaluate(EDGE_LIKE);
+      assert.notEqual(d?.action, 'audioOnly',
+        'edge-канал с высоким RTT, но низким loss не должен попадать в audio-only');
+    }
+    assert.notEqual(p.level, AUDIO_ONLY_LEVEL);
+  });
+
+  test('AND-логика audio-only (v3): высокий loss при низком RTT не вызывает audio-only', () => {
+    const p = new AdaptationPolicy({ enabled: true });
+    // эмулируем lossy-канал: rtt=100, loss=50 — НЕ должно вырубать видео,
+    // но должно идти агрессивное понижение через обычный downgrade
+    for (let i = 0; i < 10; i++) {
+      tickMs(1000);
+      const d = p.evaluate(LOSS_SPIKE);
+      assert.notEqual(d?.action, 'audioOnly',
+        'loss-only пиков недостаточно для audio-only без высокого RTT');
+    }
+    assert.notEqual(p.level, AUDIO_ONLY_LEVEL);
   });
 
   test('setEnabled(false) сбрасывает streak-счётчики', () => {

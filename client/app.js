@@ -378,7 +378,10 @@ function startTelemetry() {
     },
   });
 
-  // Менеджер восстановления соединения через ICE restart
+  // Менеджер восстановления соединения через ICE restart.
+  // Это активное вмешательство в WebRTC, поэтому включается только в
+  // adaptive-режиме — в baseline хотим оценивать поведение «голого»
+  // браузера без наших механизмов восстановления.
   recoveryManager = new RecoveryManager(pc, {
     getRole: () => role,
     sendRestartOffer,
@@ -409,6 +412,8 @@ function startTelemetry() {
       }
       log('recovery fail');
     },
+  }, {
+    enabled: mode === 'adaptive',
   });
 
   collectorHandle = startMetricsCollector(pc, (rawStats) => {
@@ -490,12 +495,19 @@ function setMode(newMode) {
   mode = newMode;
   modeLabel.textContent = newMode;
   if (policy) policy.setEnabled(newMode === 'adaptive');
+  // RecoveryManager — часть разработанного адаптивного слоя, в baseline
+  // отключаем, чтобы базовое сравнение шло против «голого» WebRTC без
+  // механизма ICE-restart, который мы сами добавляем.
+  if (recoveryManager) recoveryManager.setEnabled(newMode === 'adaptive');
   if (recorder.isActive()) recorder.mark(`mode=${newMode}`);
   // В baseline-режиме политика отключена → переход в audio-only не происходит,
   // нужно сбросить связанные UX-состояния.
   if (newMode === 'baseline') {
     audioOnlyActive = false;
     setAudioOnly(false);
+    // Если как раз шло восстановление — гасим оверлей, чтобы он не висел.
+    recoveryActive = false;
+    setRecovering(false);
   }
   showToast(`Режим: ${newMode}`, { type: 'info', duration: 2000 });
 }

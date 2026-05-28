@@ -36,6 +36,13 @@ export class RecoveryManager {
     this.attemptTimeoutMs    = opts.attemptTimeoutMs    ?? 10000;
     this.minAttemptIntervalMs = opts.minAttemptIntervalMs ?? 2000;
     this.maxAttempts = opts.maxAttempts ?? 3;
+    // ICE restart — это активное вмешательство в WebRTC-стек, поэтому
+    // RecoveryManager относится к разработанному в работе адаптивному
+    // слою и не должен работать в baseline-режиме (иначе сравнение
+    // baseline ↔ adaptive было бы нечестным: оба прогона имели бы
+    // одинаковый recovery-механизм). По умолчанию включён, в baseline
+    // вызывающий код передаёт enabled:false.
+    this.enabled = opts.enabled !== false;
 
     this.attempts = 0;
     this.recovering = false;
@@ -50,6 +57,17 @@ export class RecoveryManager {
     this.giveUp = false;
   }
 
+  /**
+   * Переключение adaptive ↔ baseline на лету. При выключении сбрасываем
+   * накопленные счётчики, чтобы при последующем включении не сработал
+   * «протухший» disconnectedSince или зацикленный giveUp.
+   */
+  setEnabled(v) {
+    const wasEnabled = this.enabled;
+    this.enabled = !!v;
+    if (wasEnabled && !this.enabled) this.reset();
+  }
+
   reset() {
     this.attempts = 0;
     this.recovering = false;
@@ -61,6 +79,7 @@ export class RecoveryManager {
   }
 
   observe(stats) {
+    if (!this.enabled) return;
     if (!this.pc || this.recovering || this.giveUp) return;
 
     const now = performance.now();

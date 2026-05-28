@@ -146,6 +146,50 @@ describe('RecoveryManager', () => {
     assert.equal(rm.attempts, 0);
   });
 
+  test('enabled:false — observe() не триггерит ICE restart даже на failed', () => {
+    const pc = makePc({ iceConnectionState: 'failed' });
+    const { cb, calls } = makeCallbacks();
+    const rm = new RecoveryManager(pc, cb, { enabled: false });
+    rm.observe({});
+    return new Promise(resolve => setImmediate(() => {
+      assert.equal(calls.restartOffer, 0,
+        'в baseline (enabled:false) ICE restart не должен запускаться');
+      assert.equal(calls.start.length, 0);
+      resolve();
+    }));
+  });
+
+  test('setEnabled(false) во время disconnected — сбрасывает накопленное состояние', () => {
+    const pc = makePc({ iceConnectionState: 'disconnected' });
+    const { cb, calls } = makeCallbacks();
+    const rm = new RecoveryManager(pc, cb, { disconnectTimeoutMs: 3000 });
+    rm.observe({});
+    assert.notEqual(rm.disconnectedSince, null);
+    rm.setEnabled(false);
+    // даже если время пройдёт — триггера не будет
+    tickMs(10000);
+    rm.observe({});
+    return new Promise(resolve => setImmediate(() => {
+      assert.equal(calls.restartOffer, 0);
+      // и состояние сброшено — disconnectedSince обнулён
+      assert.equal(rm.disconnectedSince, null);
+      resolve();
+    }));
+  });
+
+  test('setEnabled(true) обратно — recovery снова работает', () => {
+    const pc = makePc({ iceConnectionState: 'failed' });
+    const { cb, calls } = makeCallbacks();
+    const rm = new RecoveryManager(pc, cb, { enabled: false });
+    rm.observe({});
+    rm.setEnabled(true);
+    rm.observe({});
+    return new Promise(resolve => setImmediate(() => {
+      assert.equal(calls.restartOffer, 1);
+      resolve();
+    }));
+  });
+
   test('stuck connection: bytesReceived не растёт > stuckTimeoutMs → триггер', () => {
     const pc = makePc({ iceConnectionState: 'connected', connectionState: 'connected' });
     const { cb, calls } = makeCallbacks();
